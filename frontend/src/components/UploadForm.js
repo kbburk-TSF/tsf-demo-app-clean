@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { EventSourcePolyfill } from "event-source-polyfill";
 
 function UploadForm() {
   const [dataset, setDataset] = useState("air_quality");
   const [file, setFile] = useState(null);
-  const [message, setMessage] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [messages, setMessages] = useState([]);
 
   // Your backend Render URL
   const API_URL = "https://tsf-demo-backend.onrender.com";
@@ -14,7 +12,7 @@ function UploadForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
-      setMessage("Please select a file first.");
+      alert("Please select a file first.");
       return;
     }
 
@@ -22,32 +20,25 @@ function UploadForm() {
     formData.append("dataset", dataset);
     formData.append("file", file);
 
-    try {
-      setMessage("");
-      setUploading(true);
-      setProgress(0);
+    // Connect to the streaming endpoint using EventSourcePolyfill
+    const es = new EventSourcePolyfill(`${API_URL}/upload-csv-stream/`, {
+      method: "POST",
+      body: formData,
+    });
 
-      const res = await axios.post(`${API_URL}/upload-csv/`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percent = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            setProgress(percent);
-          }
-        },
-      });
+    setMessages(["🚀 Upload started..."]);
 
-      setMessage("✅ Upload successful: " + res.data.message);
-    } catch (err) {
-      console.error(err);
-      setMessage(
-        "❌ Upload failed: " + (err.response?.data?.detail || err.message)
-      );
-    } finally {
-      setUploading(false);
-    }
+    es.onmessage = (event) => {
+      setMessages((prev) => [...prev, event.data]);
+      if (event.data.includes("✅") || event.data.includes("❌")) {
+        es.close();
+      }
+    };
+
+    es.onerror = () => {
+      setMessages((prev) => [...prev, "❌ Connection error"]);
+      es.close();
+    };
   };
 
   return (
@@ -66,21 +57,17 @@ function UploadForm() {
           accept=".csv"
         />
         <br />
-        <button type="submit" disabled={uploading}>
-          {uploading ? "Uploading..." : "Upload CSV"}
-        </button>
+        <button type="submit">Upload with Realtime Updates</button>
       </form>
 
-      {uploading && (
-        <div>
-          <p>Uploading... {progress}%</p>
-          <progress value={progress} max="100">
-            {progress}%
-          </progress>
-        </div>
-      )}
-
-      {message && <p>{message}</p>}
+      <div>
+        <h4>Status:</h4>
+        <ul>
+          {messages.map((msg, i) => (
+            <li key={i}>{msg}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
