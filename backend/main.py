@@ -2,6 +2,7 @@ import os
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .db import engine, Base, get_db
 
@@ -9,6 +10,20 @@ from .db import engine, Base, get_db
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+# Allow frontend to connect to backend
+origins = [
+    "https://tsf-demo-frontend.onrender.com",  # your Render frontend
+    "http://localhost:3000",                   # optional local dev
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
@@ -26,14 +41,15 @@ async def upload_csv_stream(
 
     async def event_generator():
         try:
-            # Save the file in chunks
-            save_path = f"uploads/{dataset}_{file.filename}"
+            # Ensure uploads directory exists
             os.makedirs("uploads", exist_ok=True)
+            save_path = f"uploads/{dataset}_{file.filename}"
 
+            # Save file in chunks while reporting progress
+            total_bytes = 0
             with open(save_path, "wb") as f:
-                total_bytes = 0
                 while True:
-                    chunk = await file.read(1024 * 1024)  # 1 MB chunks
+                    chunk = await file.read(1024 * 1024)  # 1MB chunks
                     if not chunk:
                         break
                     f.write(chunk)
@@ -41,7 +57,7 @@ async def upload_csv_stream(
                     yield f"data: Uploaded {total_bytes // 1024} KB so far\n\n"
                     await asyncio.sleep(0.2)
 
-            # Simulate processing steps
+            # Simulated processing steps
             steps = ["Validating CSV", "Cleaning data", "Saving to DB", "Done"]
             for step in steps:
                 yield f"data: {step}\n\n"
