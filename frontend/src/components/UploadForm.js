@@ -27,7 +27,7 @@ function UploadForm() {
       setUploading(true);
       setProgress(0);
 
-      const res = await axios.post(`${API_URL}/datasets/upload`, formData, {
+      const res = await axios.post(`${API_URL}/upload-csv/`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
@@ -43,7 +43,7 @@ function UploadForm() {
     } catch (err) {
       console.error(err);
       setMessage(
-        "❌ Upload failed: " + (err.response?.data?.error || err.message)
+        "❌ Upload failed: " + (err.response?.data?.detail || err.message)
       );
     } finally {
       setUploading(false);
@@ -56,8 +56,8 @@ function UploadForm() {
         <label>Select Dataset:</label>
         <select value={dataset} onChange={(e) => setDataset(e.target.value)}>
           <option value="air_quality">Air Quality</option>
-          <option value="sales">Sales</option>
-          <option value="weather">Weather</option>
+          <option value="finance">Finance</option>
+          <option value="flight_performance">Flight Performance</option>
         </select>
         <br />
         <input
@@ -74,7 +74,9 @@ function UploadForm() {
       {uploading && (
         <div>
           <p>Uploading... {progress}%</p>
-          <progress value={progress} max="100">{progress}%</progress>
+          <progress value={progress} max="100">
+            {progress}%
+          </progress>
         </div>
       )}
 
