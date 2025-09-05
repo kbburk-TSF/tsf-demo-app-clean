@@ -1,7 +1,6 @@
 import os
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, Depends
-from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .db import engine, Base, get_db
@@ -11,10 +10,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Allow frontend to connect to backend
+# Allow frontend to connect
 origins = [
-    "https://tsf-demo-frontend.onrender.com",  # your Render frontend
-    "http://localhost:3000",                   # optional local dev
+    "https://tsf-demo-frontend.onrender.com",  # Render frontend
+    "http://localhost:3000"                    # optional local dev
 ]
 
 app.add_middleware(
@@ -25,47 +24,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Store progress in memory
+progress_store = {}
+
 @app.get("/")
 def root():
     return {"message": "Backend connected. Upload CSV to populate datasets."}
 
-@app.post("/upload-csv-stream/")
-async def upload_csv_stream(
+@app.post("/upload-csv/")
+async def upload_csv(
     dataset: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
     """
-    Upload CSV with realtime streaming progress updates.
+    Upload CSV and simulate processing with progress tracking.
     """
+    task_id = f"{dataset}_{file.filename}"
+    progress_store[task_id] = "Starting upload..."
 
-    async def event_generator():
-        try:
-            # Ensure uploads directory exists
-            os.makedirs("uploads", exist_ok=True)
-            save_path = f"uploads/{dataset}_{file.filename}"
+    # Save file
+    os.makedirs("uploads", exist_ok=True)
+    save_path = f"uploads/{task_id}"
+    with open(save_path, "wb") as f:
+        contents = await file.read()
+        f.write(contents)
 
-            # Save file in chunks while reporting progress
-            total_bytes = 0
-            with open(save_path, "wb") as f:
-                while True:
-                    chunk = await file.read(1024 * 1024)  # 1MB chunks
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    total_bytes += len(chunk)
-                    yield f"data: Uploaded {total_bytes // 1024} KB so far\n\n"
-                    await asyncio.sleep(0.2)
+    # Simulate step-by-step processing
+    steps = ["Validating CSV", "Cleaning data", "Saving to DB", "Done"]
+    for step in steps:
+        progress_store[task_id] = step
+        await asyncio.sleep(2)
 
-            # Simulated processing steps
-            steps = ["Validating CSV", "Cleaning data", "Saving to DB", "Done"]
-            for step in steps:
-                yield f"data: {step}\n\n"
-                await asyncio.sleep(1)
+    progress_store[task_id] = f"✅ Upload and processing complete for {file.filename}"
+    return {"task_id": task_id}
 
-            yield f"data: ✅ Upload and processing complete for {file.filename}\n\n"
-
-        except Exception as e:
-            yield f"data: ❌ Error: {str(e)}\n\n"
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+@app.get("/progress/{task_id}")
+def get_progress(task_id: str):
+    """
+    Return latest progress update.
+    """
+    return {"status": progress_store.get(task_id, "Unknown task")}

@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { EventSourcePolyfill } from "event-source-polyfill";
+import axios from "axios";
 
 function UploadForm() {
   const [dataset, setDataset] = useState("air_quality");
   const [file, setFile] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [polling, setPolling] = useState(false);
 
-  // Your backend Render URL
   const API_URL = "https://tsf-demo-backend.onrender.com";
 
   const handleSubmit = async (e) => {
@@ -20,25 +20,31 @@ function UploadForm() {
     formData.append("dataset", dataset);
     formData.append("file", file);
 
-    // Connect to the streaming endpoint using EventSourcePolyfill
-    const es = new EventSourcePolyfill(`${API_URL}/upload-csv-stream/`, {
-      method: "POST",
-      body: formData,
-    });
+    try {
+      setMessages(["🚀 Upload started..."]);
+      const res = await axios.post(`${API_URL}/upload-csv/`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-    setMessages(["🚀 Upload started..."]);
+      const taskId = res.data.task_id;
+      setMessages((prev) => [...prev, "📡 Tracking progress..."]);
+      setPolling(true);
 
-    es.onmessage = (event) => {
-      setMessages((prev) => [...prev, event.data]);
-      if (event.data.includes("✅") || event.data.includes("❌")) {
-        es.close();
-      }
-    };
+      // Poll every 1s for progress updates
+      const interval = setInterval(async () => {
+        const progressRes = await axios.get(`${API_URL}/progress/${taskId}`);
+        const status = progressRes.data.status;
+        setMessages((prev) => [...prev, status]);
 
-    es.onerror = () => {
-      setMessages((prev) => [...prev, "❌ Connection error"]);
-      es.close();
-    };
+        if (status.includes("✅") || status.includes("❌")) {
+          clearInterval(interval);
+          setPolling(false);
+        }
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      setMessages(["❌ Upload failed: " + (err.response?.data?.detail || err.message)]);
+    }
   };
 
   return (
@@ -57,7 +63,9 @@ function UploadForm() {
           accept=".csv"
         />
         <br />
-        <button type="submit">Upload with Realtime Updates</button>
+        <button type="submit" disabled={polling}>
+          {polling ? "Processing..." : "Upload CSV"}
+        </button>
       </form>
 
       <div>
