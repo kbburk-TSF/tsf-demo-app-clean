@@ -28,7 +28,7 @@ function UploadForm() {
       });
 
       const taskId = res.data.task_id;
-      setMessages((prev) => [...prev, "📡 Tracking progress..."]);
+      setMessages((prev) => [...prev, "📡 Tracking database insert progress..."]);
       setPolling(true);
 
       // Poll every 1s for progress updates

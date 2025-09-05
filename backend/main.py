@@ -1,19 +1,21 @@
-import os
+import csv
+import io
 import asyncio
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+import os
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from db import engine, Base, get_db  # ✅ fixed: absolute imports
+from db import engine, Base, get_db
+import models
 
-# Create tables on startup
+# ✅ Create database tables at startup
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 # ✅ Allow frontend to connect
 origins = [
-    "https://tsf-demo-frontend.onrender.com",  # your deployed frontend
+    "https://tsf-demo-frontend.onrender.com",  # frontend Render URL
     "http://localhost:3000",                   # optional local dev
 ]
 
@@ -25,46 +27,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple health check
 @app.get("/")
 def root():
     return {"message": "Backend connected. Upload CSV to populate datasets."}
 
-# In-memory progress store
+# ✅ In-memory progress tracker
 progress_store = {}
 
 @app.post("/upload-csv/")
 async def upload_csv(
     dataset: str = Form(...),
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
 ):
     """
-    Upload CSV and simulate processing with progress tracking.
+    Upload CSV → parse rows → insert into Postgres via SQLAlchemy.
     """
+    if not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+
     task_id = f"{dataset}_{file.filename}"
     progress_store[task_id] = "Starting upload..."
 
-    # Ensure uploads directory exists
-    os.makedirs("uploads", exist_ok=True)
-    save_path = f"uploads/{task_id}"
+    # ✅ Read CSV into memory
+    contents = await file.read()
+    decoded = contents.decode("utf-8")
+    reader = csv.reader(io.StringIO(decoded))
 
-    # Save the uploaded file
-    with open(save_path, "wb") as f:
-        contents = await file.read()
-        f.write(contents)
+    headers = next(reader, None)
+    if not headers:
+        raise HTTPException(status_code=400, detail="CSV has no headers")
 
-    # Simulate step-by-step processing
-    steps = ["Validating CSV", "Cleaning data", "Saving to DB", "Done"]
-    for step in steps:
-        progress_store[task_id] = step
-        await asyncio.sleep(2)  # simulate time-consuming work
+    progress_store[task_id] = "Inserting rows into database..."
 
-    progress_store[task_id] = f"✅ Upload and processing complete for {file.filename}"
+    # ✅ Example: Save rows into a table (adjust model to your schema)
+    for i, row in enumerate(reader, start=1):
+        record = models.DatasetRow(
+            dataset=dataset,
+            row_data=str(row)  # ⚠️ Simplified: store whole row as text
+        )
+        db.add(record)
+
+        if i % 100 == 0:
+            db.commit()
+            progress_store[task_id] = f"Inserted {i} rows..."
+
+    db.commit()
+    progress_store[task_id] = f"✅ Upload complete. Inserted {i} rows."
     return {"task_id": task_id}
 
 @app.get("/progress/{task_id}")
 def get_progress(task_id: str):
-    """
-    Return latest progress update.
-    """
     return {"status": progress_store.get(task_id, "Unknown task")}
