@@ -1,6 +1,7 @@
 import os
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from .db import engine, Base, get_db
@@ -10,10 +11,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Allow frontend to connect
+# ✅ Allow frontend to connect
 origins = [
-    "https://tsf-demo-frontend.onrender.com",  # Render frontend
-    "http://localhost:3000"                    # optional local dev
+    "https://tsf-demo-frontend.onrender.com",  # your deployed frontend
+    "http://localhost:3000",                   # optional local dev
 ]
 
 app.add_middleware(
@@ -24,12 +25,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store progress in memory
-progress_store = {}
-
+# Simple health check
 @app.get("/")
 def root():
     return {"message": "Backend connected. Upload CSV to populate datasets."}
+
+# In-memory progress store
+progress_store = {}
 
 @app.post("/upload-csv/")
 async def upload_csv(
@@ -43,9 +45,11 @@ async def upload_csv(
     task_id = f"{dataset}_{file.filename}"
     progress_store[task_id] = "Starting upload..."
 
-    # Save file
+    # Ensure uploads directory exists
     os.makedirs("uploads", exist_ok=True)
     save_path = f"uploads/{task_id}"
+
+    # Save the uploaded file
     with open(save_path, "wb") as f:
         contents = await file.read()
         f.write(contents)
@@ -54,7 +58,7 @@ async def upload_csv(
     steps = ["Validating CSV", "Cleaning data", "Saving to DB", "Done"]
     for step in steps:
         progress_store[task_id] = step
-        await asyncio.sleep(2)
+        await asyncio.sleep(2)  # simulate time-consuming work
 
     progress_store[task_id] = f"✅ Upload and processing complete for {file.filename}"
     return {"task_id": task_id}
