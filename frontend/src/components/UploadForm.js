@@ -7,6 +7,7 @@ function UploadForm() {
   const [messages, setMessages] = useState([]);
   const [polling, setPolling] = useState(false);
 
+  // ✅ Your backend Render URL
   const API_URL = "https://tsf-demo-backend.onrender.com";
 
   const handleSubmit = async (e) => {
@@ -32,18 +33,28 @@ function UploadForm() {
 
       // Poll every 1s for progress updates
       const interval = setInterval(async () => {
-        const progressRes = await axios.get(`${API_URL}/progress/${taskId}`);
-        const status = progressRes.data.status;
-        setMessages((prev) => [...prev, status]);
+        try {
+          const progressRes = await axios.get(`${API_URL}/progress/${taskId}`);
+          const status = progressRes.data.status;
+          setMessages((prev) => [...prev, status]);
 
-        if (status.includes("✅") || status.includes("❌")) {
+          if (status.includes("✅") || status.includes("❌")) {
+            clearInterval(interval);
+            setPolling(false);
+          }
+        } catch (pollErr) {
+          console.error(pollErr);
+          setMessages((prev) => [...prev, "❌ Failed to fetch progress"]);
           clearInterval(interval);
           setPolling(false);
         }
       }, 1000);
     } catch (err) {
       console.error(err);
-      setMessages(["❌ Upload failed: " + (err.response?.data?.detail || err.message)]);
+      setMessages([
+        "❌ Upload failed: " +
+          (err.response?.data?.detail || err.message || "Unknown error"),
+      ]);
     }
   };
 
