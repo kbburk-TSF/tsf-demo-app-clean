@@ -1,10 +1,12 @@
 import React from "react";
+import UploadForm from "./components/UploadForm";
 
 function App() {
   return (
-    <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h1>TSF Demo Frontend</h1>
-      <p>Frontend is running on Render 🚀</p>
+    <div style={{ maxWidth: "600px", margin: "40px auto", textAlign: "center" }}>
+      <h1>TSF Demo App</h1>
+      <p>Upload CSV files to populate demo datasets</p>
+      <UploadForm />
     </div>
   );
 }

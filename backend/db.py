@@ -1,10 +1,18 @@
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-raw_url = os.getenv("DATABASE_URL", "postgresql://tsf_user:tsf_pass@localhost:5432/tsf_demo")
-# Many managed Postgres (including Railway) require SSL. Add it if missing.
-if "sslmode=" not in raw_url:
-    separator = "&" if "?" in raw_url else "?"
-    raw_url = f"{raw_url}{separator}sslmode=require"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(raw_url, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+# Dependency for FastAPI routes
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
