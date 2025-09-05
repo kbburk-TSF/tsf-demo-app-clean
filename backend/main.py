@@ -1,10 +1,10 @@
 import os
 import asyncio
-from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from .db import engine, Base, get_db
+from db import engine, Base, get_db  # ✅ fixed: absolute imports
 
 # Create tables on startup
 Base.metadata.create_all(bind=engine)
@@ -37,7 +37,6 @@ progress_store = {}
 async def upload_csv(
     dataset: str = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
 ):
     """
     Upload CSV and simulate processing with progress tracking.
